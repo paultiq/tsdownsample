@@ -85,7 +85,7 @@ jobs:
         rust-toolchain: nightly
         target: ${{ matrix.target }}
         manylinux: auto
-        args: --release --out dist --features abi3-py310
+        args: --release --out dist --features abi3-py310 --interpreter python3.11
 
     - run: ${{ matrix.ls || 'ls -lh' }} dist/
 
