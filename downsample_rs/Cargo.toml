@@ -35,3 +35,7 @@ harness = false
 [[bench]]
 name = "bench_minmaxlttb"
 harness = false
+
+[[bench]]
+name = "bench_optimized_comparison"
+harness = false

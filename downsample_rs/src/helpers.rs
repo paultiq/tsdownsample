@@ -21,6 +21,7 @@ use crate::types::Num;
 
 pub trait Average {
     fn average(&self) -> f64;
+    fn average_optimized(&self) -> f64;
 }
 
 impl<T> Average for [T]
@@ -30,4 +31,73 @@ where
     fn average(&self) -> f64 {
         self.iter().fold(0f64, |acc, &x| acc + x.as_()) as f64 / self.len() as f64
     }
+
+    fn average_optimized(&self) -> f64 {
+        // Dispatch to SIMD implementation based on runtime CPU detection
+        average_simd_dispatch(self)
+    }
+}
+
+// SIMD-optimized averaging with runtime CPU detection
+#[inline]
+fn average_simd_dispatch<T: Num + AsPrimitive<f64>>(data: &[T]) -> f64 {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if is_x86_feature_detected!("avx2") {
+            unsafe { average_f64_avx2(data) }
+        } else {
+            average_f64_scalar(data)
+        }
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        average_f64_scalar(data)
+    }
+}
+
+// Scalar fallback (same as original)
+#[inline]
+fn average_f64_scalar<T: Num + AsPrimitive<f64>>(data: &[T]) -> f64 {
+    data.iter().fold(0f64, |acc, &x| acc + x.as_()) / data.len() as f64
+}
+
+// AVX2 SIMD implementation for f64 accumulation
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn average_f64_avx2<T: Num + AsPrimitive<f64>>(data: &[T]) -> f64 {
+    use std::arch::x86_64::*;
+
+    let len = data.len();
+    if len == 0 {
+        return 0.0;
+    }
+
+    // Convert to f64 and use AVX2
+    // AVX2 processes 4 f64s at a time (256-bit / 64-bit = 4)
+    let mut sum = _mm256_setzero_pd();
+    let mut i = 0;
+
+    // Process 4 elements at a time
+    while i + 4 <= len {
+        let a = data[i].as_();
+        let b = data[i + 1].as_();
+        let c = data[i + 2].as_();
+        let d = data[i + 3].as_();
+
+        let vals = _mm256_set_pd(d, c, b, a);
+        sum = _mm256_add_pd(sum, vals);
+        i += 4;
+    }
+
+    // Horizontal sum of the 4 f64 lanes
+    let sum_array: [f64; 4] = std::mem::transmute(sum);
+    let mut total = sum_array[0] + sum_array[1] + sum_array[2] + sum_array[3];
+
+    // Handle remaining elements
+    while i < len {
+        total += data[i].as_();
+        i += 1;
+    }
+
+    total / len as f64
 }

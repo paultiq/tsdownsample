@@ -18,6 +18,7 @@ pub fn lttb_with_x<Tx: Num + AsPrimitive<f64>, Ty: Num + AsPrimitive<f64>>(
     x: &[Tx],
     y: &[Ty],
     n_out: usize,
+    optimized: bool,
 ) -> Vec<usize> {
     assert_eq!(x.len(), y.len());
     if n_out >= x.len() {
@@ -41,7 +42,11 @@ pub fn lttb_with_x<Tx: Num + AsPrimitive<f64>, Ty: Num + AsPrimitive<f64>>(
         let avg_range_end = cmp::min((every * (i + 2) as f64) as usize + 1, x.len());
 
         let y_slice = &y[avg_range_start..avg_range_end];
-        let avg_y: f64 = y_slice.average();
+        let avg_y: f64 = if optimized {
+            y_slice.average_optimized()
+        } else {
+            y_slice.average()
+        };
         // TODO: avg_y could be approximated argminmax instead of mean?
         // TODO: below is faster than above, but not as accurate
         // let avg_x: f64 = (x_slice[avg_range_end - 1].as_() + x_slice[avg_range_start].as_()) / 2.0;
@@ -93,7 +98,7 @@ pub fn lttb_with_x<Tx: Num + AsPrimitive<f64>, Ty: Num + AsPrimitive<f64>>(
 
 // ----------- WITHOUT X
 
-pub fn lttb_without_x<Ty: Num + AsPrimitive<f64>>(y: &[Ty], n_out: usize) -> Vec<usize> {
+pub fn lttb_without_x<Ty: Num + AsPrimitive<f64>>(y: &[Ty], n_out: usize, optimized: bool) -> Vec<usize> {
     if n_out >= y.len() {
         return (0..y.len()).collect::<Vec<usize>>();
     }
@@ -115,7 +120,11 @@ pub fn lttb_without_x<Ty: Num + AsPrimitive<f64>>(y: &[Ty], n_out: usize) -> Vec
         let avg_range_end = cmp::min((every * (i + 2) as f64) as usize + 1, y.len());
 
         let y_slice = &y[avg_range_start..avg_range_end];
-        let avg_y: f64 = y_slice.average();
+        let avg_y: f64 = if optimized {
+            y_slice.average_optimized()
+        } else {
+            y_slice.average()
+        };
         let avg_x: f64 = (avg_range_start + avg_range_end - 1) as f64 / 2.0;
 
         // Get the range for this bucket
@@ -191,14 +200,14 @@ mod tests {
     fn test_lttb_with_x() {
         let x = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
         let y = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
-        let sampled_indices = lttb_with_x(&x, &y, 4);
+        let sampled_indices = lttb_with_x(&x, &y, 4, false);
         assert_eq!(sampled_indices, vec![0, 1, 5, 9]);
     }
 
     #[test]
     fn test_lttb_without_x() {
         let y = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
-        let sampled_indices = lttb_without_x(&y, 4);
+        let sampled_indices = lttb_without_x(&y, 4, false);
         assert_eq!(sampled_indices, vec![0, 1, 5, 9]);
     }
 
@@ -208,9 +217,27 @@ mod tests {
             const N: usize = 5_000;
             let x: [i32; N] = core::array::from_fn(|i| i as i32);
             let y = utils::get_random_array(N, f32::MIN, f32::MAX);
-            let sampled_indices1 = lttb_with_x(&x, y.as_slice(), 200);
-            let sampled_indices2 = lttb_without_x(y.as_slice(), 200);
+            let sampled_indices1 = lttb_with_x(&x, y.as_slice(), 200, false);
+            let sampled_indices2 = lttb_without_x(y.as_slice(), 200, false);
             assert_eq!(sampled_indices1, sampled_indices2);
+        }
+    }
+
+    #[test]
+    fn test_optimized_same_output() {
+        // Verify that optimized version produces identical results
+        for _ in 0..100 {
+            const N: usize = 5_000;
+            let x: [i32; N] = core::array::from_fn(|i| i as i32);
+            let y = utils::get_random_array(N, f32::MIN, f32::MAX);
+
+            let baseline_with_x = lttb_with_x(&x, y.as_slice(), 200, false);
+            let optimized_with_x = lttb_with_x(&x, y.as_slice(), 200, true);
+            assert_eq!(baseline_with_x, optimized_with_x, "lttb_with_x: optimized should match baseline");
+
+            let baseline_without_x = lttb_without_x(y.as_slice(), 200, false);
+            let optimized_without_x = lttb_without_x(y.as_slice(), 200, true);
+            assert_eq!(baseline_without_x, optimized_without_x, "lttb_without_x: optimized should match baseline");
         }
     }
 }

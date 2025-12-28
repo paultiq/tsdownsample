@@ -159,7 +159,7 @@ pub(crate) fn minmaxlttb_generic<Tx: Num + AsPrimitive<f64>, Ty: Num + AsPrimiti
                 .collect::<Vec<Ty>>()
         };
         // Apply lttb on the reduced data
-        let index_points_selected = lttb_with_x(x.as_slice(), y.as_slice(), n_out);
+        let index_points_selected = lttb_with_x(x.as_slice(), y.as_slice(), n_out, false);
         // Return the original index
         return index_points_selected
             .iter()
@@ -167,7 +167,7 @@ pub(crate) fn minmaxlttb_generic<Tx: Num + AsPrimitive<f64>, Ty: Num + AsPrimiti
             .collect::<Vec<usize>>();
     }
     // Apply lttb on all data when requirement is not met
-    lttb_with_x(x, y, n_out)
+    lttb_with_x(x, y, n_out, false)
 }
 
 #[inline(always)]
@@ -195,7 +195,7 @@ pub(crate) fn minmaxlttb_generic_without_x<Ty: Num + AsPrimitive<f64>>(
                 .collect::<Vec<Ty>>()
         };
         // Apply lttb on the reduced data (using the preselect data its index)
-        let index_points_selected = lttb_with_x(index.as_slice(), y.as_slice(), n_out);
+        let index_points_selected = lttb_with_x(index.as_slice(), y.as_slice(), n_out, false);
         // Return the original index
         return index_points_selected
             .iter()
@@ -203,7 +203,7 @@ pub(crate) fn minmaxlttb_generic_without_x<Ty: Num + AsPrimitive<f64>>(
             .collect::<Vec<usize>>();
     }
     // Apply lttb on all data when requirement is not met
-    lttb_without_x(y, n_out).to_vec()
+    lttb_without_x(y, n_out, false).to_vec()
 }
 
 #[cfg(test)]

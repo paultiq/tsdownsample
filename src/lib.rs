@@ -32,6 +32,27 @@ macro_rules! _create_pyfunc_without_x {
     };
 }
 
+// Macro for LTTB functions that accept optimized parameter
+macro_rules! _create_pyfunc_without_x_optimized {
+    ($name:ident, $resample_mod:ident, $resample_fn:ident, $type:ty, $mod:ident) => {
+        // Create the Python function
+        #[pyfunction]
+        #[pyo3(signature = (y, n_out, optimized=false))]
+        fn $name<'py>(
+            py: Python<'py>,
+            y: PyReadonlyArray1<$type>,
+            n_out: usize,
+            optimized: bool,
+        ) -> Bound<'py, PyArray1<usize>> {
+            let y = y.as_slice().unwrap();
+            let sampled_indices = $resample_mod::$resample_fn(y, n_out, optimized);
+            sampled_indices.into_pyarray(py)
+        }
+        // Add the function to the module
+        $mod.add_wrapped(wrap_pyfunction!($name))?;
+    };
+}
+
 macro_rules! _create_pyfunc_without_x_with_ratio {
     ($name:ident, $resample_mod:ident, $resample_fn:ident, $type:ty, $mod:ident) => {
         // Create the Python function
@@ -84,6 +105,29 @@ macro_rules! _create_pyfunc_with_x {
             let x = x.as_slice().unwrap();
             let y = y.as_slice().unwrap();
             let sampled_indices = $resample_mod::$resample_fn(x, y, n_out);
+            sampled_indices.into_pyarray(py)
+        }
+        // Add the function to the module
+        $mod.add_wrapped(wrap_pyfunction!($name))?;
+    };
+}
+
+// Macro for LTTB functions that accept optimized parameter
+macro_rules! _create_pyfunc_with_x_optimized {
+    ($name:ident, $resample_mod:ident, $resample_fn:ident, $type_x:ty, $type_y:ty, $mod:ident) => {
+        // Create the Python function
+        #[pyfunction]
+        #[pyo3(signature = (x, y, n_out, optimized=false))]
+        fn $name<'py>(
+            py: Python<'py>,
+            x: PyReadonlyArray1<$type_x>,
+            y: PyReadonlyArray1<$type_y>,
+            n_out: usize,
+            optimized: bool,
+        ) -> Bound<'py, PyArray1<usize>> {
+            let x = x.as_slice().unwrap();
+            let y = y.as_slice().unwrap();
+            let sampled_indices = $resample_mod::$resample_fn(x, y, n_out, optimized);
             sampled_indices.into_pyarray(py)
         }
         // Add the function to the module
@@ -230,6 +274,19 @@ macro_rules! create_pyfuncs_with_x {
     };
 }
 
+// Optimized versions for LTTB
+macro_rules! create_pyfuncs_with_x_optimized {
+    ($resample_mod:ident, $resample_fn:ident, $mod:ident) => {
+        _create_pyfuncs_with_x_helper!(_create_pyfunc_with_x_optimized, $resample_mod, $resample_fn, $mod);
+    };
+}
+
+macro_rules! create_pyfuncs_without_x_optimized {
+    ($resample_mod:ident, $resample_fn:ident, $mod:ident) => {
+        _create_pyfuncs_without_x_helper!(_create_pyfunc_without_x_optimized, $resample_mod, $resample_fn, $mod);
+    };
+}
+
 macro_rules! create_pyfuncs_with_x_with_ratio {
     ($resample_mod:ident, $resample_fn:ident, $mod:ident) => {
         _create_pyfuncs_with_x_helper!(
@@ -355,12 +412,12 @@ fn lttb(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Create the Python functions for the module
     // ----- WITHOUT X
     {
-        create_pyfuncs_without_x!(lttb_mod, lttb_without_x, sequential_mod);
+        create_pyfuncs_without_x_optimized!(lttb_mod, lttb_without_x, sequential_mod);
     }
 
     // ----- WITH X
     {
-        create_pyfuncs_with_x!(lttb_mod, lttb_with_x, sequential_mod);
+        create_pyfuncs_with_x_optimized!(lttb_mod, lttb_with_x, sequential_mod);
     }
 
     // Add the sub modules to the module

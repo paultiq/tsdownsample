@@ -91,6 +91,23 @@ min_max_without_x_parallel!(min_max_without_x_parallel, ArgMinMax, |arr| arr.arg
 min_max_without_x_parallel!(min_max_without_x_parallel_nan, NaNArgMinMax, |arr| arr
     .nanargminmax());
 
+// Optimized versions
+macro_rules! min_max_without_x_parallel_optimized {
+    ($func_name:ident, $trait:path, $f_argminmax:expr) => {
+        pub fn $func_name<T: Copy + PartialOrd + Send + Sync>(arr: &[T], n_out: usize) -> Vec<usize>
+        where
+            for<'a> &'a [T]: $trait,
+        {
+            assert_eq!(n_out % 2, 0);
+            min_max_generic_parallel_optimized(arr, n_out, $f_argminmax)
+        }
+    };
+}
+
+min_max_without_x_parallel_optimized!(min_max_without_x_parallel_opt, ArgMinMax, |arr| arr.argminmax());
+min_max_without_x_parallel_optimized!(min_max_without_x_parallel_nan_opt, NaNArgMinMax, |arr| arr
+    .nanargminmax());
+
 // ----------------------------------- GENERICS ------------------------------------
 
 // --------------------- WITHOUT X
@@ -141,6 +158,25 @@ pub(crate) fn min_max_generic_parallel<T: Copy + PartialOrd + Send + Sync>(
     n_out: usize,
     f_argminmax: fn(&[T]) -> (usize, usize),
 ) -> Vec<usize> {
+    min_max_generic_parallel_impl(arr, n_out, f_argminmax, false)
+}
+
+#[inline(always)]
+pub(crate) fn min_max_generic_parallel_optimized<T: Copy + PartialOrd + Send + Sync>(
+    arr: &[T],
+    n_out: usize,
+    f_argminmax: fn(&[T]) -> (usize, usize),
+) -> Vec<usize> {
+    min_max_generic_parallel_impl(arr, n_out, f_argminmax, true)
+}
+
+#[inline(always)]
+fn min_max_generic_parallel_impl<T: Copy + PartialOrd + Send + Sync>(
+    arr: &[T],
+    n_out: usize,
+    f_argminmax: fn(&[T]) -> (usize, usize),
+    optimized: bool,
+) -> Vec<usize> {
     // Assumes n_out is a multiple of 2
     if n_out >= arr.len() {
         return (0..arr.len()).collect::<Vec<usize>>();
@@ -149,31 +185,63 @@ pub(crate) fn min_max_generic_parallel<T: Copy + PartialOrd + Send + Sync>(
     // arr.len() - 1 is used to match the delta of a range-index (0..arr.len()-1)
     let block_size: f64 = (arr.len() - 1) as f64 / (n_out / 2) as f64;
 
-    // Store the enumerated indexes in the output array
-    // These indexes are used to calculate the start and end indexes of each bin in
-    // the multi-threaded execution
-    let mut sampled_indices: Vec<usize> = (0..n_out).collect::<Vec<usize>>();
+    // Optimized version: don't fill with 0..n_out, just allocate
+    let mut sampled_indices: Vec<usize> = if optimized {
+        Vec::with_capacity(n_out)
+    } else {
+        // Store the enumerated indexes in the output array
+        // These indexes are used to calculate the start and end indexes of each bin in
+        // the multi-threaded execution
+        (0..n_out).collect::<Vec<usize>>()
+    };
 
-    POOL.install(|| {
-        sampled_indices
-            .par_chunks_exact_mut(2)
-            .for_each(|sampled_index_chunk| {
-                let i: f64 = unsafe { *sampled_index_chunk.get_unchecked(0) >> 1 } as f64;
-                let start_idx: usize = (block_size * i) as usize + (i != 0.0) as usize;
-                let end_idx: usize = (block_size * (i + 1.0)) as usize + 1;
+    if optimized {
+        // Optimized: use unsafe set_len since we're filling exactly n_out elements
+        unsafe { sampled_indices.set_len(n_out) };
 
-                let (min_index, max_index) = f_argminmax(&arr[start_idx..end_idx]);
+        POOL.install(|| {
+            sampled_indices
+                .par_chunks_exact_mut(2)
+                .enumerate()
+                .for_each(|(chunk_idx, sampled_index_chunk)| {
+                    let i = chunk_idx as f64;
+                    let start_idx: usize = (block_size * i) as usize + (i != 0.0) as usize;
+                    let end_idx: usize = (block_size * (i + 1.0)) as usize + 1;
 
-                // Add the indexes in sorted order
-                if min_index < max_index {
-                    sampled_index_chunk[0] = min_index + start_idx;
-                    sampled_index_chunk[1] = max_index + start_idx;
-                } else {
-                    sampled_index_chunk[0] = max_index + start_idx;
-                    sampled_index_chunk[1] = min_index + start_idx;
-                }
-            })
-    });
+                    let (min_index, max_index) = f_argminmax(&arr[start_idx..end_idx]);
+
+                    // Add the indexes in sorted order
+                    if min_index < max_index {
+                        sampled_index_chunk[0] = min_index + start_idx;
+                        sampled_index_chunk[1] = max_index + start_idx;
+                    } else {
+                        sampled_index_chunk[0] = max_index + start_idx;
+                        sampled_index_chunk[1] = min_index + start_idx;
+                    }
+                })
+        });
+    } else {
+        POOL.install(|| {
+            sampled_indices
+                .par_chunks_exact_mut(2)
+                .for_each(|sampled_index_chunk| {
+                    let i: f64 = unsafe { *sampled_index_chunk.get_unchecked(0) >> 1 } as f64;
+                    let start_idx: usize = (block_size * i) as usize + (i != 0.0) as usize;
+                    let end_idx: usize = (block_size * (i + 1.0)) as usize + 1;
+
+                    let (min_index, max_index) = f_argminmax(&arr[start_idx..end_idx]);
+
+                    // Add the indexes in sorted order
+                    if min_index < max_index {
+                        sampled_index_chunk[0] = min_index + start_idx;
+                        sampled_index_chunk[1] = max_index + start_idx;
+                    } else {
+                        sampled_index_chunk[0] = max_index + start_idx;
+                        sampled_index_chunk[1] = min_index + start_idx;
+                    }
+                })
+        });
+    }
 
     sampled_indices
 }
