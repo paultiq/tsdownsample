@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
-          python-version: cp310
+          python-version: cp312
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -47,7 +47,7 @@ jobs:
       matrix:
         os: ['ubuntu-latest']
         rust: ['nightly']  # ['stable', 'beta']
-        python-version: [cp310, cp314, cp314t]
+        python-version: [cp312, cp314, cp314t]
     
     env:
       PYTHON: ${{ matrix.python-version }}
@@ -139,7 +139,7 @@ jobs:
     - name: set up python
       uses: actions/setup-python@v6
       with:
-        python-version: cp310
+        python-version: cp312
         architecture: ${{ matrix.python-architecture || 'x64' }}
 
     - name: build sdist
@@ -220,7 +220,7 @@ jobs:
     - name: set up python
       uses: actions/setup-python@v6
       with:
-        python-version: cp310
+        python-version: cp312
 
     - run: pip install -U twine packaging
 
