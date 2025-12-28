@@ -57,7 +57,7 @@ jobs:
             python-architecture: arm64
           - os: macos
             target: x86_64
-            runner: macos-13
+            runner: macos-latest
             python-architecture: x64
         exclude:
           - os: windows
