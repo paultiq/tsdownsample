@@ -40,42 +40,115 @@ jobs:
       - run: make lint  # Lint Python & Rust
       - run: make mypy  # Type check Python
 
-  Test:
-    runs-on: ${{ matrix.os }}
+  Build:
+    name: build on ${{ matrix.os }} (${{ matrix.target }}) py${{ matrix.python-version }}
+    runs-on: ${{ matrix.runner || format('{0}-latest', matrix.os) }}
     strategy:
       fail-fast: false
       matrix:
-        os: ['windows-latest', 'macOS-latest', 'ubuntu-latest']
-        rust: ['nightly']  # ['stable', 'beta']
+        os: [ubuntu, windows, macos]
+        target: [x86_64, aarch64]
         python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
-    
+        include:
+          - os: windows
+            ls: dir
+          - os: macos
+            target: aarch64
+            runner: macos-latest
+          - os: macos
+            target: x86_64
+            runner: macos-13
+        exclude:
+          - os: windows
+            target: aarch64
+          # Don't build all Python versions for cross-compilation targets
+          - os: ubuntu
+            target: aarch64
+            python-version: '3.11'
+          - os: ubuntu
+            target: aarch64
+            python-version: '3.12'
+          - os: ubuntu
+            target: aarch64
+            python-version: '3.13'
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: set up python
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ matrix.python-version }}
+        architecture: ${{ matrix.python-architecture || 'x64' }}
+
+    - name: build sdist
+      if: ${{ matrix.os == 'ubuntu' && matrix.target == 'x86_64' && matrix.python-version == '3.10' }}
+      uses: PyO3/maturin-action@v1
+      with:
+        command: sdist
+        args: --out dist
+
+    - name: build wheels
+      uses: PyO3/maturin-action@v1
+      with:
+        rust-toolchain: nightly
+        target: ${{ matrix.target }}
+        manylinux: auto
+        args: --release --out dist --interpreter ${{ matrix.python-version }}
+
+    - run: ${{ matrix.ls || 'ls -lh' }} dist/
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: wheels-${{ matrix.os }}-${{ matrix.target }}-py${{ matrix.python-version }}
+        path: dist
+        retention-days: 1
+
+  Test:
+    name: test ${{ matrix.os }} (${{ matrix.target }}) py${{ matrix.python-version }}
+    needs: Build
+    runs-on: ${{ matrix.runner || format('{0}-latest', matrix.os) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu, windows, macos]
+        target: [x86_64, aarch64]
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
+        include:
+          - os: macos
+            target: aarch64
+            runner: macos-latest
+          - os: macos
+            target: x86_64
+            runner: macos-15-intel
+        exclude:
+          - os: windows
+            target: aarch64
+          # Only test native builds (skip cross-compilation)
+          - os: ubuntu
+            target: aarch64
+
     env:
       PYTHON: ${{ matrix.python-version }}
 
     steps:
       - uses: actions/checkout@v6
+
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install -r tests/requirements.txt
 
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Download built wheel
+        uses: actions/download-artifact@v4
         with:
-          profile: minimal
-          toolchain: nightly
-          components: clippy, rustfmt
-      - name: Setup Rust
-        run: |
-          rustup update nightly --no-self-update
-          rustup default nightly
-      - name: Cache rust
-        uses: Swatinem/rust-cache@v2
+          name: wheels-${{ matrix.os }}-${{ matrix.target }}-py${{ matrix.python-version }}
+          path: dist
 
-      - name: install develop version
-        run: make install
-        
-      - run: pip install -r tests/requirements.txt
+      - name: Install test dependencies
+        run: pip install -r tests/requirements.txt
+
+      - name: Install built wheel
+        run: pip install dist/*.whl
 
       - run: pip freeze
 
@@ -84,57 +157,8 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
 
-  Build:
-    name: build abi3-py310 on ${{ matrix.os }} (${{ matrix.target }})
-    # if: "success() && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'Full Build'))"
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu
-            target: x86_64
-          - os: ubuntu
-            target: aarch64
-          - os: windows
-            target: x86_64
-            ls: dir
-          - os: macos
-            target: aarch64
-
-    runs-on: ${{ format('{0}-latest', matrix.os) }}
-    steps:
-    - uses: actions/checkout@v6
-
-    - name: set up python
-      uses: actions/setup-python@v6
-      with:
-        python-version: '3.14'
-        architecture: ${{ matrix.python-architecture || 'x64' }}
-
-    - name: build sdist
-      if: ${{ matrix.os == 'ubuntu' && matrix.target == 'x86_64' }}
-      uses: PyO3/maturin-action@v1
-      with:
-        command: sdist
-        args: --out dist
-
-    - name: build wheels (abi3-py310)
-      uses: PyO3/maturin-action@v1
-      with:
-        rust-toolchain: nightly
-        target: ${{ matrix.target }}
-        manylinux: auto
-        args: --release --out dist --features abi3-py310
-
-    - run: ${{ matrix.ls || 'ls -lh' }} dist/
-
-    - uses: actions/upload-artifact@v4
-      with:
-        name: pypi_files-abi3-${{ matrix.os }}-${{ matrix.target }}
-        path: dist
-
   Release:
-    needs: [Lint_and_Check, Test, Build]
+    needs: [Lint_and_Check, Test]
     # if: "success() && startsWith(github.ref, 'refs/tags/')"
     runs-on: ubuntu-latest
 
@@ -151,7 +175,7 @@ jobs:
     - name: get dist artifacts
       uses: actions/download-artifact@v4
       with:
-        pattern: pypi_files-*
+        pattern: wheels-*
         merge-multiple: true
         path: dist
 
