@@ -143,6 +143,12 @@ jobs:
 
     - run: ${{ matrix.ls || 'ls -lh' }} dist/
 
+    - name: Install built wheel and run pytest
+      run: |
+        pip install dist/*.whl
+        pip install -r tests/requirements.txt
+        pytest tests/
+
     - uses: actions/upload-artifact@v4
       with:
         name: pypi_files-${{ matrix.build-type }}-${{ matrix.os }}-${{ matrix.target }}
@@ -186,6 +192,12 @@ jobs:
         UNSAFE_PYO3_BUILD_FREE_THREADED: 1
 
     - run: ${{ matrix.ls || 'ls -lh' }} dist/
+
+    - name: Install built wheel and run pytest
+      run: |
+        pip install dist/*.whl
+        pip install -r tests/requirements.txt
+        pytest tests/
 
     - uses: actions/upload-artifact@v4
       with:
