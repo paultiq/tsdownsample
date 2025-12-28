@@ -54,9 +54,11 @@ jobs:
           - os: macos
             target: aarch64
             runner: macos-latest
+            python-architecture: arm64
           - os: macos
             target: x86_64
             runner: macos-13
+            python-architecture: x64
         exclude:
           - os: windows
             target: aarch64
@@ -89,7 +91,7 @@ jobs:
 
     - uses: actions/upload-artifact@v4
       with:
-        name: pypi_files-abi3-${{ matrix.os }}-${{ matrix.target }}
+        name: dist-${{ matrix.os }}-${{ matrix.target }}
         path: dist
         retention-days: 1
 
@@ -130,7 +132,7 @@ jobs:
       - name: Download built wheel
         uses: actions/download-artifact@v4
         with:
-          name: pypi_files-abi3-${{ matrix.os }}-${{ matrix.target }}
+          name: dist-${{ matrix.os }}-${{ matrix.target }}
           path: dist
 
       - name: Install test dependencies
@@ -164,7 +166,7 @@ jobs:
     - name: get dist artifacts
       uses: actions/download-artifact@v4
       with:
-        pattern: pypi_files-abi3-*
+        pattern: dist-*
         merge-multiple: true
         path: dist
 
