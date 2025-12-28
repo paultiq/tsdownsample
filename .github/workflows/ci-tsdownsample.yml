@@ -144,6 +144,11 @@ jobs:
     - run: ${{ matrix.ls || 'ls -lh' }} dist/
 
     - name: Install built wheel and run pytest
+      # Only test native builds (skip cross-compilation: aarch64 wheels built on x86_64)
+      if: |
+        (matrix.os != 'macos' && matrix.target == 'x86_64') ||
+        (matrix.os == 'macos' && matrix.runner == 'macos-15-intel' && matrix.target == 'x86_64') ||
+        (matrix.os == 'macos' && matrix.runner != 'macos-15-intel' && matrix.target == 'aarch64')
       run: |
         pip install dist/*.whl
         pip install -r tests/requirements.txt
@@ -194,6 +199,7 @@ jobs:
     - run: ${{ matrix.ls || 'ls -lh' }} dist/
 
     - name: Install built wheel and run pytest
+      if: (matrix.os == 'macos' && matrix.target == 'aarch64') || (matrix.os != 'macos' && matrix.target == 'x86_64')
       run: |
         pip install dist/*.whl
         pip install -r tests/requirements.txt
