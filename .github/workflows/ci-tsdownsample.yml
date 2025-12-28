@@ -41,14 +41,13 @@ jobs:
       - run: make mypy  # Type check Python
 
   Build:
-    name: build on ${{ matrix.os }} (${{ matrix.target }}) py${{ matrix.python-version }}
+    name: build on ${{ matrix.os }} (${{ matrix.target }})
     runs-on: ${{ matrix.runner || format('{0}-latest', matrix.os) }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu, windows, macos]
         target: [x86_64, aarch64]
-        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
         include:
           - os: windows
             ls: dir
@@ -61,16 +60,6 @@ jobs:
         exclude:
           - os: windows
             target: aarch64
-          # Don't build all Python versions for cross-compilation targets
-          - os: ubuntu
-            target: aarch64
-            python-version: '3.11'
-          - os: ubuntu
-            target: aarch64
-            python-version: '3.12'
-          - os: ubuntu
-            target: aarch64
-            python-version: '3.13'
 
     steps:
     - uses: actions/checkout@v6
@@ -78,29 +67,29 @@ jobs:
     - name: set up python
       uses: actions/setup-python@v6
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: '3.10'
         architecture: ${{ matrix.python-architecture || 'x64' }}
 
     - name: build sdist
-      if: ${{ matrix.os == 'ubuntu' && matrix.target == 'x86_64' && matrix.python-version == '3.10' }}
+      if: ${{ matrix.os == 'ubuntu' && matrix.target == 'x86_64' }}
       uses: PyO3/maturin-action@v1
       with:
         command: sdist
         args: --out dist
 
-    - name: build wheels
+    - name: build wheels (abi3)
       uses: PyO3/maturin-action@v1
       with:
         rust-toolchain: nightly
         target: ${{ matrix.target }}
         manylinux: auto
-        args: --release --out dist --interpreter ${{ matrix.python-version }}
+        args: --release --out dist --features abi3-py310
 
     - run: ${{ matrix.ls || 'ls -lh' }} dist/
 
     - uses: actions/upload-artifact@v4
       with:
-        name: wheels-${{ matrix.os }}-${{ matrix.target }}-py${{ matrix.python-version }}
+        name: pypi_files-abi3-${{ matrix.os }}-${{ matrix.target }}
         path: dist
         retention-days: 1
 
@@ -141,7 +130,7 @@ jobs:
       - name: Download built wheel
         uses: actions/download-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}-${{ matrix.target }}-py${{ matrix.python-version }}
+          name: pypi_files-abi3-${{ matrix.os }}-${{ matrix.target }}
           path: dist
 
       - name: Install test dependencies
@@ -175,7 +164,7 @@ jobs:
     - name: get dist artifacts
       uses: actions/download-artifact@v4
       with:
-        pattern: wheels-*
+        pattern: pypi_files-abi3-*
         merge-multiple: true
         path: dist
 
