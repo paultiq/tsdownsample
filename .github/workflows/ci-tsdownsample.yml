@@ -96,15 +96,6 @@ jobs:
         include:
           - os: windows
             ls: dir
-          - os: macos
-            build-type: cp310
-            runner: macos-13
-          - os: macos
-            build-type: cp311
-            runner: macos-13
-          - os: macos
-            build-type: abi3-py312
-            runner: macos-latest
         exclude:
           - os: windows
             target: aarch64
