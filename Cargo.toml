@@ -9,7 +9,7 @@ license = "MIT"
 
 [dependencies]
 downsample_rs = { path = "downsample_rs", features = ["half"]}
-pyo3 = { version = "0.26", features = ["extension-module"] }
+pyo3 = { version = "0.26", features = ["extension-module", "abi3-py310"] }
 numpy = { version = "0.26", features = ["half"] }
 half = { version = "2.6", default-features = false }
 paste = { version = "1.0", default-features = false }

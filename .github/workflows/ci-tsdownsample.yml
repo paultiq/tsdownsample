@@ -46,7 +46,7 @@ jobs:
       matrix:
         os: ['windows-latest', 'macOS-latest', 'ubuntu-latest']
         rust: ['nightly']  # ['stable', 'beta']
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14', '3.14t']
     
     env:
       PYTHON: ${{ matrix.python-version }}
@@ -138,7 +138,7 @@ jobs:
     - name: set up python
       uses: actions/setup-python@v5
       with:
-        python-version: 3.13
+        python-version: 3.10
         architecture: ${{ matrix.python-architecture || 'x64' }}
 
     - name: build sdist
@@ -155,13 +155,57 @@ jobs:
         target: ${{ matrix.target }}
         manylinux: ${{ matrix.manylinux || 'auto' }}
         container: ${{ matrix.container }}
-        args: --release --out dist --interpreter ${{ matrix.interpreter || '3.8 3.9 3.10 3.11 3.12 3.13 3.14' }}
+        args: --release --out dist
 
     - run: ${{ matrix.ls || 'ls -lh' }} dist/
 
     - uses: actions/upload-artifact@v4
       with:
         name: pypi_files-${{ matrix.os }}-${{ matrix.target }}-${{ matrix.interpreter || 'all' }}-${{ matrix.manylinux || 'auto' }}
+        path: dist
+
+  Build_FreeThreaded:
+    name: build free-threaded on ${{ matrix.os }} (${{ matrix.target }})
+    if: "success() && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'Full Build'))"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu, macos, windows]
+        target: [x86_64, aarch64]
+        include:
+          - os: windows
+            ls: dir
+          - os: macos
+            target: aarch64
+        exclude:
+          - os: windows
+            target: aarch64
+
+    runs-on: ${{ matrix.os }}-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: set up python 3.14t
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.14t
+        architecture: ${{ matrix.python-architecture || 'x64' }}
+
+    - name: build free-threaded wheels
+      uses: PyO3/maturin-action@v1
+      with:
+        rust-toolchain: nightly
+        target: ${{ matrix.target }}
+        manylinux: auto
+        args: --release --out dist --interpreter 3.14t
+      env:
+        UNSAFE_PYO3_BUILD_FREE_THREADED: 1
+
+    - run: ${{ matrix.ls || 'ls -lh' }} dist/
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: pypi_files-ft-${{ matrix.os }}-${{ matrix.target }}
         path: dist
 
   Release:
