@@ -104,6 +104,10 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Install gettext (macOS workaround for Python 3.10/3.11)
+      if: runner.os == 'macOS' && (matrix.build-type == 'cp310' || matrix.build-type == 'cp311')
+      run: brew install gettext
+
     - name: set up python
       uses: actions/setup-python@v5
       with:
