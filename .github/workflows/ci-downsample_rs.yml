@@ -104,6 +104,11 @@ jobs:
       - name: Cache Dependencies
         uses: Swatinem/rust-cache@v1
 
+      - name: Print system info
+        run: |
+          nproc
+          free -h
+          lscpu
       - name: Run benchmarks
         run: cargo bench --quiet --message-format=short  --all-features | grep "time:"
 
