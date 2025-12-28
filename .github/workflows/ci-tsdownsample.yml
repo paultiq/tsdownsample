@@ -96,11 +96,20 @@ jobs:
         include:
           - os: windows
             ls: dir
+          - os: macos
+            build-type: cp310
+            runner: macos-13
+          - os: macos
+            build-type: cp311
+            runner: macos-13
+          - os: macos
+            build-type: abi3-py312
+            runner: macos-latest
         exclude:
           - os: windows
             target: aarch64
 
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: ${{ matrix.runner || format('{0}-latest', matrix.os) }}
     steps:
     - uses: actions/checkout@v3
 
