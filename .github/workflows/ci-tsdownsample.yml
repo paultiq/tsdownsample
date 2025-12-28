@@ -86,7 +86,7 @@ jobs:
 
   Build:
     name: build ${{ matrix.build-type }} on ${{ matrix.os }} (${{ matrix.target }})
-    if: "success() && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'Full Build'))"
+    # if: "success() && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'Full Build'))"
     strategy:
       fail-fast: false
       matrix:
@@ -144,7 +144,7 @@ jobs:
 
   Build_FreeThreaded:
     name: build free-threaded on ${{ matrix.os }} (${{ matrix.target }})
-    if: "success() && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'Full Build'))"
+    # if: "success() && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'Full Build'))"
     strategy:
       fail-fast: false
       matrix:
